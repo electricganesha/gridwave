@@ -3,12 +3,12 @@ var GridWave = function(el, config){
       imagePath: null,
       modelPath:null,
       modelColor: 0x3F3F3F,
-      ambientColor: 0x060606,
+      ambientColor: 0x111111,
       dirColor: 0x333333,
       lightColor: 0xFFFFFF,
       lightIntensity: 2,
-      lightDistance: 24.0,
-      lightElevation: 12,
+      lightDistance: 30.0,
+      lightElevation: 16,
       cameraElevation: 20,
       scaleX:1,
       scaleY:1
@@ -34,7 +34,7 @@ var GridWave = function(el, config){
     this.camera.position.z = this.cameraElevation;
     this.scene = new THREE.Scene();
     
-    this.dirLight = new THREE.DirectionalLight(this.dirColor);
+    this.dirLight = new THREE.DirectionalLight(this.dirColor,0.66);
     this.dirLight.position.z = 2*this.cameraElevation;
     this.scene.add(this.dirLight);
   
@@ -104,7 +104,7 @@ GridWave.prototype.getMaterial = function(){
         {
             "emissive" : { type: "c", value: new THREE.Color( 0x000000 ) },
             "roughness": { type: "1f", value: 0.5 },
-            "metalness": { type: "1f", value: 0 },
+            "metalness": { type: "1f", value: 0.2 },
             "envMapIntensity" : { type: "1f", value: 1 },
             "time": { type:"1f", value: 0}
         }
@@ -128,8 +128,8 @@ GridWave.prototype.render = function(time){
       for ( var i = 0; i < intersects.length; i++ ) {
           var p = intersects[ i ].point;
        
-          this.light.position.x = p.x;
-          this.light.position.y = p.y;
+          this.light.position.x = p.x * 1.2;
+          this.light.position.y = p.y * 1.2;
       }
       this.mesh.material.uniforms.time.value = time/2000;
     }
