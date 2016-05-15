@@ -1,19 +1,17 @@
 var GridWave = function(el, config){
     var defaults = {
-      segmentsWidth: 10,
-      segmentsHeight: 6,
       imagePath: null,
       modelPath:null,
-      modelColor: 0xFFFFFF,
-      ambientColor: 0x222222,
-      dirColor: 0x111111,
-      lightColor: 0xAA0000,
-      lightDistance: 30.0,
+      modelColor: 0x3F3F3F,
+      ambientColor: 0x111111,
+      dirColor: 0x333333,
+      lightColor: 0xFFFFFF,
+      lightIntensity: 3,
+      lightDistance: 15.0,
       lightElevation: 10,
       cameraElevation: 20,
       scaleX:1,
       scaleY:1
-        
     }
     this.el = el;
     if(config)
@@ -35,30 +33,31 @@ var GridWave = function(el, config){
     this.renderer.setSize(this.width, this.height);
     this.camera.position.z = this.cameraElevation;
     this.scene = new THREE.Scene();
-    this.imageQuad = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ) , null);
-    //this.scene.add(this.imageQuad);
     
     this.dirLight = new THREE.DirectionalLight(this.dirColor);
-    this.dirLight.position.z = this.cameraElevation;
+    this.dirLight.position.z = 2*this.cameraElevation;
     this.scene.add(this.dirLight);
   
     this.ambient = new THREE.AmbientLight(this.ambientColor);
     this.scene.add(this.ambient);
 
-	this.light = new THREE.PointLight(this.lightColor,1.0,this.lightDistance,2);
+	this.light = new THREE.PointLight(this.lightColor,this.lightIntensity,this.lightDistance,2);
     this.light.position.z = this.lightElevation;
     this.scene.add(this.light);
     var self=this;
     var modelPromise = this.loadModel(this.modelPath).then(function(geometry){
-      self.mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+      /* self.mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
         color:self.modelColor, 
         transparent:true,
+        side: THREE.DoubleSide
       }));
+      */
+      self.mesh = new THREE.Mesh(geometry, self.getMaterial());
       self.mesh.scale.set(self.scaleX,self.scaleY,1);
       self.scene.add(self.mesh);
       self.camera.lookAt(self.mesh.position);
       self.dirLight.lookAt(self.mesh.position);
-	
+	  self.mesh.geometry.computeBoundingBox();
     
     });
     
@@ -89,13 +88,39 @@ GridWave.prototype.mousemove = function(event){
 
 GridWave.prototype.getMaterial = function(){
   return new THREE.ShaderMaterial({
-    transparent:true,
+    uniforms: THREE.UniformsUtils.merge( [
+        THREE.UniformsLib[ 'common' ],
+        THREE.UniformsLib[ 'aomap' ],
+        THREE.UniformsLib[ 'lightmap' ],
+        THREE.UniformsLib[ 'emissivemap' ],
+        THREE.UniformsLib[ 'bumpmap' ],
+        THREE.UniformsLib[ 'normalmap' ],
+        THREE.UniformsLib[ 'displacementmap' ],
+        THREE.UniformsLib[ 'roughnessmap' ],
+        THREE.UniformsLib[ 'metalnessmap' ],
+        THREE.UniformsLib[ 'fog' ],
+        THREE.UniformsLib[ 'lights' ],
+
+        {
+            "emissive" : { type: "c", value: new THREE.Color( 0x000000 ) },
+            "roughness": { type: "1f", value: 0.5 },
+            "metalness": { type: "1f", value: 0 },
+            "envMapIntensity" : { type: "1f", value: 1 },
+            "time": { type:"1f", value: 0}
+        }
+
+    ] ),
+
     vertexShader: this.vertexShaderText,
+    fragmentShader: THREE.ShaderChunk[ 'meshphysical_frag' ],
+    transparent: true,
+    lights: true
   })
 }
 
 GridWave.prototype.render = function(time){
     window.requestAnimationFrame(this.render.bind(this));
+    
     if(this.mesh){
       this.raycaster.setFromCamera( this.mouse, this.camera );	
       var intersects = this.raycaster.intersectObjects( [this.mesh] );
@@ -106,6 +131,7 @@ GridWave.prototype.render = function(time){
           this.light.position.x = p.x;
           this.light.position.y = p.y;
       }
+      this.mesh.material.uniforms.time.value = time/16000;
     }
     this.renderer.render(this.scene,this.camera);
     
@@ -118,16 +144,24 @@ GridWave.prototype.start = function(){
 GridWave.prototype.stop = function(){
     this.stop = true;
 }
-
 GridWave.prototype.vertexShaderText = [
-"		precision highp float;",
-"		uniform float amplitude;",
-"		attribute float displacement;",
-"		varying vec3 vNormal;",
-"		varying vec3 v_viewPosition;",
-"		varying vec3 v_position;",
-"",
-"		vec3 mod289(vec3 x)",
+  "#define PHYSICAL",
+  "varying vec3 vViewPosition;",
+  "#ifndef FLAT_SHADED",
+  "	varying vec3 vNormal;",
+  "#endif",
+  "#include <common>",
+  "#include <uv_pars_vertex>",
+  "#include <uv2_pars_vertex>",
+  "#include <displacementmap_pars_vertex>",
+  "#include <color_pars_vertex>",
+  "#include <morphtarget_pars_vertex>",
+  "#include <skinning_pars_vertex>",
+  "#include <shadowmap_pars_vertex>",
+  "#include <specularmap_pars_fragment>",
+  "#include <logdepthbuf_pars_vertex>",
+  "#include <clipping_planes_pars_vertex>",
+  "		vec3 mod289(vec3 x)",
 "		{",
 "			return x - floor(x * (1.0 / 289.0)) * 289.0;",
 "		}",
@@ -291,11 +325,7 @@ GridWave.prototype.vertexShaderText = [
 "			return 2.2 * n_xyz;",
 "		}",
 "",
-"		float stripes( float x, float f) {",
-"			float PI = 3.14159265358979323846264;",
-"			float t = .5 + .5 * sin( f * 2.0 * PI * x);",
-"			return t * t - .5;",
-"		}",
+
 "",
 "		float turbulence( vec3 p ) {",
 "			float w = 100.0;",
@@ -308,30 +338,30 @@ GridWave.prototype.vertexShaderText = [
 "		}",
 "",
 "		uniform float time;",
-"		uniform float weight;",
-"		uniform float span;",
-"		float z_actual;",
-"",
-"		void main() {",
-"",
-"			gl_PointSize = 1.0;",
-"",
-"			vNormal = normal;",
-"			vec4 mPosition = modelMatrix * vec4( position, 1.0 );",
-"			vec3 nWorld = normalize( mat3( modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz ) * normal );",
-"",
-"			float noise = 10.0 *  -.10 * turbulence( .5 * normal + time );",
-"			float displacement = - weight * noise;",
-"			displacement += 80.0 * pnoise( 0.9 * position + vec3( 10.0 * time ), vec3( 100.0 ) );",
-"",
-"			vec3 newPosition = position + normal * vec3(displacement * amplitude);",
-"			gl_Position = projectionMatrix *",
-"			modelViewMatrix *",
-"			vec4(newPosition,1.0);",
-"",
-"			v_viewPosition = - mPosition.xyz;",
-"			v_position = newPosition;",
-"",
-"		}"
+  
+  "void main() {",
+  " ",
+  "	#include <uv_vertex>",
+  "	#include <uv2_vertex>",
+  "	#include <color_vertex>",
+  "	#include <beginnormal_vertex>",
+  "	#include <morphnormal_vertex>",
+  "	#include <skinbase_vertex>",
+  "	#include <skinnormal_vertex>",
+  "	#include <defaultnormal_vertex>",
+  "#ifndef FLAT_SHADED",
+  "	vNormal = normalize( transformedNormal );",
+  "#endif",
+  "	#include <begin_vertex>",
+  "	#include <displacementmap_vertex>",
+  " transformed.y +=  pnoise( 0.9 * position + vec3( 10.0 * time ), vec3( 100.0 ) );",
+  "	#include <morphtarget_vertex>",
+  "	#include <skinning_vertex>",
+  "	#include <project_vertex>",
+  "	#include <logdepthbuf_vertex>",
+  "	#include <clipping_planes_vertex>",
+  "	vViewPosition = - mvPosition.xyz;",
+  "	#include <worldpos_vertex>",
+  "	#include <shadowmap_vertex>",
+  "}"
 ].join("\n");
-
