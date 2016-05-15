@@ -5,7 +5,8 @@ var GridWave = function(el, config){
       imagePath: null,
       modelPath:null,
       modelColor: 0xFFFFFF,
-      ambientColor: 0x111111,
+      ambientColor: 0x222222,
+      dirColor: 0x111111,
       lightColor: 0xAA0000,
       lightDistance: 30.0,
       lightElevation: 10,
@@ -37,8 +38,11 @@ var GridWave = function(el, config){
     this.imageQuad = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ) , null);
     //this.scene.add(this.imageQuad);
     
-    this.ambient = new THREE.DirectionalLight(this.ambientColor);
-    this.ambient.position.z = this.cameraElevation;
+    this.dirLight = new THREE.DirectionalLight(this.dirColor);
+    this.dirLight.position.z = this.cameraElevation;
+    this.scene.add(this.dirLight);
+  
+    this.ambient = new THREE.AmbientLight(this.ambientColor);
     this.scene.add(this.ambient);
 
 	this.light = new THREE.PointLight(this.lightColor,1.0,this.lightDistance,2);
@@ -53,7 +57,7 @@ var GridWave = function(el, config){
       self.mesh.scale.set(self.scaleX,self.scaleY,1);
       self.scene.add(self.mesh);
       self.camera.lookAt(self.mesh.position);
-      self.ambient.lookAt(self.mesh.position);
+      self.dirLight.lookAt(self.mesh.position);
 	
     
     });
