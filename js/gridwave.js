@@ -1,63 +1,113 @@
 var GridWave = function(el, config){
     var defaults = {
-        segmentsWidth: 10,
-        segmentsHeight: 6,
-        imagePath: null,
-        modelPath:null,
-        gridColor: 0xFFFFFF,
-        ambientColor: 0xAAAAAA,
-        lightColor: 0xAA0000,
-        lightRadius: 1.0
+      segmentsWidth: 10,
+      segmentsHeight: 6,
+      imagePath: null,
+      modelPath:null,
+      modelColor: 0xFFFFFF,
+      ambientColor: 0x111111,
+      lightColor: 0xAA0000,
+      lightDistance: 30.0,
+      lightElevation: 10,
+      cameraElevation: 20,
+      scaleX:1,
+      scaleY:1
+        
     }
     this.el = el;
-    for(var d in defaults) this[d] = config[d] ? config[d]:defaults[d];
+    if(config)
+      for(var d in defaults) 
+        this[d] = config[d] ? config[d]:defaults[d];
      
     // THREE
-    
+    this.el.style.background = ["transparent url(",this.imagePath,") center center"].join("");
+  
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
+    this.el.addEventListener("mousemove", this.mousemove.bind(this));
+  
     this.renderer = new THREE.WebGLRenderer({antialias:true});
-    
-    window.addEventListener("resize", this.resize.bind(this));
-    this.resize();
-    
+    this.renderer.setPixelRatio( window.devicePixelRatio );
+    this.width = this.el.offsetWidth;
+    this.height = this.el.offsetHeight;
+    this.camera = new THREE.PerspectiveCamera(45,this.width/this.height,1,500);
+    this.renderer.setSize(this.width, this.height);
+    this.camera.position.z = this.cameraElevation;
     this.scene = new THREE.Scene();
     this.imageQuad = new THREE.Mesh( new THREE.PlaneBufferGeometry( 2, 2 ) , null);
-    this.scene.add(this.imageQuad);
+    //this.scene.add(this.imageQuad);
     
-    this.ambient = new THREE.AmbientLight(this.ambientColor);
-	this.scene.add(this.ambient);
+    this.ambient = new THREE.DirectionalLight(this.ambientColor);
+    this.ambient.position.z = this.cameraElevation;
+    this.scene.add(this.ambient);
 
-	this.light = new THREE.PointLight(this.lightColor);
+	this.light = new THREE.PointLight(this.lightColor,1.0,this.lightDistance,2);
+    this.light.position.z = this.lightElevation;
     this.scene.add(this.light);
-  
-    this.model = this.loadGrid();
+    var self=this;
+    var modelPromise = this.loadModel(this.modelPath).then(function(geometry){
+      self.mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
+        color:self.modelColor, 
+        transparent:true,
+      }));
+      self.mesh.scale.set(self.scaleX,self.scaleY,1);
+      self.scene.add(self.mesh);
+      self.camera.lookAt(self.mesh.position);
+      self.ambient.lookAt(self.mesh.position);
+	
+    
+    });
+    
+   this.el.appendChild( this.renderer.domElement );
 }
 
-GridWave.prototype.loadGrid = function(path){
+GridWave.prototype.loadModel = function(path){
+    return new Promise(function(resolve,reject){
+      var ld = new THREE.JSONLoader();
+      var geometry;
     
+      ld.load( path, function( geometry,material ) {
+        console.log(geometry);
+        resolve(geometry);
+      });  
+    });
+     
 }
 
 GridWave.prototype.resize = function(path){
-    var w = el.offsetWidth, h = el.offsetHeight;
-    this.camera = new THREE.PerspectiveCamera(45,w/h,1,1000);
-    
-    this.renderer.setSize(w, h);
-}
-
-
-GridWave.prototype.backgroundMaterial = function(path){
     
 }
 
-GridWave.prototype.gridMaterial = function(){
-    
+GridWave.prototype.mousemove = function(event){
+    this.mouse.x = ( event.offsetX / this.width ) * 2 - 1;
+	this.mouse.y = - ( event.offsetY / this.height ) * 2 + 1;		
+}
+
+GridWave.prototype.getMaterial = function(){
+  return new THREE.ShaderMaterial({
+    transparent:true,
+    vertexShader: this.vertexShaderText,
+  })
 }
 
 GridWave.prototype.render = function(time){
-    if(!this.stop) window.requestAnimationFrame(this.render);
+    window.requestAnimationFrame(this.render.bind(this));
+    if(this.mesh){
+      this.raycaster.setFromCamera( this.mouse, this.camera );	
+      var intersects = this.raycaster.intersectObjects( [this.mesh] );
+
+      for ( var i = 0; i < intersects.length; i++ ) {
+          var p = intersects[ i ].point;
+       
+          this.light.position.x = p.x;
+          this.light.position.y = p.y;
+      }
+    }
+    this.renderer.render(this.scene,this.camera);
+    
 }
 
 GridWave.prototype.start = function(){
-    delete this.stop;
     this.render();
 }
 
@@ -65,7 +115,7 @@ GridWave.prototype.stop = function(){
     this.stop = true;
 }
 
-GridWave.prototype.noiseVertexText = [
+GridWave.prototype.vertexShaderText = [
 "		precision highp float;",
 "		uniform float amplitude;",
 "		attribute float displacement;",
