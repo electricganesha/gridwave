@@ -27,12 +27,13 @@
 
 		<script type="x-shader/x-vertex" id="vertexshader">
 
-		precision highp float;
 		uniform float amplitude;
 		attribute float displacement;
 		varying vec3 vNormal;
 		varying vec3 v_viewPosition;
 		varying vec3 v_position;
+		uniform float time;
+		float displacedPosition;
 
 		vec3 mod289(vec3 x)
 		{
@@ -214,27 +215,15 @@
 			return t;
 		}
 
-		uniform float time;
-		uniform float weight;
-		uniform float span;
-		float z_actual;
-
 		void main() {
-
-			gl_PointSize = 1.0;
 
 			vNormal = normal;
 			vec4 mPosition = modelMatrix * vec4( position, 1.0 );
-			vec3 nWorld = normalize( mat3( modelMatrix[0].xyz, modelMatrix[1].xyz, modelMatrix[2].xyz ) * normal );
 
-			float noise = 10.0 *  -.10 * turbulence( .5 * normal + time );
-			float displacement = - weight * noise;
-			displacement += 80.0 * pnoise( 0.9 * position + vec3( 10.0 * time ), vec3( 100.0 ) );
+			displacedPosition += 3.0 * pnoise( 5.0 * mPosition.xyz + vec3( 6.0 * time ), vec3( 10.0 ) );
 
-			vec3 newPosition = position + normal * vec3(displacement * amplitude);
-			gl_Position = projectionMatrix *
-			modelViewMatrix *
-			vec4(newPosition,1.0);
+			vec3 newPosition = mPosition.xyz+ vNormal * vec3(displacement * amplitude) + displacedPosition;
+			gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition,1.0);
 
 			v_viewPosition = - mPosition.xyz;
 			v_position = newPosition;
@@ -258,23 +247,20 @@
 
 		void main() {
 			vec3 outgoingLight = color.rgb;
-			vec3 normal = normalize( cross( dFdx( v_viewPosition ), dFdy( v_viewPosition ) ) );
-			vec3 light = vec3(0.9,0.7,1.0);
-			light = normalize(light);
-			float dProd = max(0.0, dot(vNormal, light));
-			gl_FragColor = vec4(dProd, dProd, dProd, 0.5);
+      vec3 light = vec3(0.9,0.7,1.0);
+      light = normalize(light);
 
-			// lights
-			vec4 addedLights = vec4(0., 0., 0., 1.);
-			#if MAX_POINT_LIGHTS > 0
-			for(int l = 0; l < MAX_POINT_LIGHTS; l++) {
-				vec3 lightDirection = normalize(v_position - pointLightPosition[l]);
-				addedLights.rgb += clamp(dot(-lightDirection, normal), 0.0, 1.0) * pointLightColor[l];
-			}
-			#endif
-			addedLights += vec4(ambientLightColor, 1.);
-			vec4 c = vec4(outgoingLight, 1.) * addedLights;
-			gl_FragColor = c * vec4(outgoingLight, 1.);
+      // lights
+      vec4 addedLights = vec4(0., 0., 0., 1.);
+      #if MAX_POINT_LIGHTS > 0
+      for(int l = 0; l < MAX_POINT_LIGHTS; l++) {
+        vec3 lightDirection = normalize(v_position - pointLightPosition[l]);
+        addedLights.rgb += clamp(dot(lightDirection, vNormal), 0.0, 1.0) * pointLightColor[l];
+      }
+      #endif
+      addedLights += vec4(ambientLightColor, 1.);
+      vec4 c = vec4(outgoingLight, 1.) * addedLights;
+      gl_FragColor = c * vec4(outgoingLight, 1.);
 		}
 		</script>
 		<script>
@@ -288,7 +274,7 @@
 		var FAR = 10000;
 
 		var renderer, scene, camera;
-		var planeShader, particles, plane;
+		var planeShader, plane;
 		var start = Date.now();
 
 		renderer = new THREE.WebGLRenderer({clearColor: 0x000000, clearAlpha: 1, antialias:true});
@@ -300,7 +286,7 @@
 		camera = new THREE.PerspectiveCamera(VIEW_ANGLE,ASPECT,NEAR,FAR);
 		camera.position.x = 0;
 		camera.position.y = 0;
-		camera.position.z = 10;
+		camera.position.z = 30;
 
 
 		planeShader = new THREE.ShaderMaterial({
@@ -310,66 +296,54 @@
 			uniforms: THREE.UniformsUtils.merge([
 				THREE.UniformsLib['lights'],
 				{
-					color: {type: 'f', value: 0.0},
 				},
 				THREE.UniformsLib['common'],
 				{
 					color: {type: "c", value: new THREE.Color( 0x3F3F3F )},
 					amplitude: {type: 'f', value: 0},
-					weight: { type: "f", value: 5.0 },
 					time: { type: "f", value: 0.0 }
 				}
 			]),
-			/*uniforms: { color: {type: "c", value: new THREE.Color( 0xff0000 )}, amplitude: {type: 'f', value: 0}, weight: { type: "f", value: 5.0 }
-			,time: { type: "f", value: 0.0 },},*/
 			vertexShader: $('#vertexshader').text(),
 			fragmentShader: $('#fragmentshader').text(),
-			//transparent: true
+			side:THREE.DoubleSide,
 		});
 
 		var loaderJSON = new THREE.JSONLoader();
 		var geometry;
 
-		loaderJSON.load( "gridwave-x4.js", function( geometry,material ) {
-			var vertices = geometry.vertices;
+		loaderJSON.load( "models/gridwave-x6.js", function( geometry,material ) {
 			geometry = new THREE.BufferGeometry().fromGeometry(geometry);
 
 			plane = new THREE.Mesh(geometry,planeShader);
-			plane.name="cortina";
+			plane.name="geometry";
 			scene.add(plane);
 
-			for ( var i = 0, l = vertices.length * 3 * 3; i < l; i += 3 ) {
-				vertices[ i     ] = Math.random() * 500;
-				vertices[ i + 1 ] = Math.random() * 500;
-				vertices[ i + 2 ] = Math.random() * 500;
-			}
-
-			geometry.addAttribute( 'displacement', new THREE.BufferAttribute( vertices, 3 ) );
 		});
 
 		var ambient = new THREE.AmbientLight(0xffffff);
 		scene.add(ambient);
 
-		var light1 = new THREE.PointLight(0xff00ff);
+		var light1 = new THREE.PointLight(0xffffff);
 
 		light1.position.x = 0;
-		light1.position.y = 0;
-		light1.position.z = 45;
+		light1.position.y = 45;
+		light1.position.z = 5;
 
-		light1.intensity = 5.0;
+		light1.intensity = 15.0;
 		light1.distance = 1;
 		light1.decay = 2;
 
 		scene.add(light1);
 
-		var light2 = new THREE.PointLight(0x0000ff);
+		var light2 = new THREE.PointLight(0xffffff);
 
 		light2.position.x = 0;
 		light2.position.y = 0;
-		light2.position.z = 13;
+		light2.position.z = 25;
 
 		light2.intensity = 10.0;
-		light2.distance = 0.1;
+		light2.distance = 1;
 		light2.decay = 2;
 
 		scene.add(light2);
@@ -378,11 +352,9 @@
 
 		render();
 
-		var frame = 0.009;
 		function render(){
 
-			planeShader.uniforms.amplitude.value = Math.sin(frame)*Math.cos(frame);
-			planeShader.uniforms[ 'time' ].value = .00003 * ( Date.now() - start );
+			planeShader.uniforms[ 'time' ].value = .00002 * ( Date.now() - start );
 
 			renderer.render( scene, camera);
 
@@ -394,9 +366,9 @@
 
 			mouse.x = 2 * (e.clientX / window.innerWidth) - 1;
 			mouse.y = 1 - 2 * (e.clientY / window.innerHeight);
-			
-			light2.position.x = mouse.x*7;
-			light2.position.y = mouse.y*4;
+
+			light2.position.x = mouse.x*light2.position.z;
+			light2.position.y = mouse.y*light2.position.z/2;
 		}
 
 		</script>
