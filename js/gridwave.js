@@ -6,9 +6,9 @@ var GridWave = function(el, config){
       ambientColor: 0x060606,
       dirColor: 0x333333,
       lightColor: 0xFFFFFF,
-      lightIntensity: 3,
-      lightDistance: 16.0,
-      lightElevation: 10,
+      lightIntensity: 2,
+      lightDistance: 24.0,
+      lightElevation: 12,
       cameraElevation: 20,
       scaleX:1,
       scaleY:1
@@ -131,7 +131,7 @@ GridWave.prototype.render = function(time){
           this.light.position.x = p.x;
           this.light.position.y = p.y;
       }
-      this.mesh.material.uniforms.time.value = time/16000;
+      this.mesh.material.uniforms.time.value = time/2000;
     }
     this.renderer.render(this.scene,this.camera);
     
@@ -354,7 +354,8 @@ GridWave.prototype.vertexShaderText = [
   "#endif",
   "	#include <begin_vertex>",
   "	#include <displacementmap_vertex>",
-  " transformed +=   pnoise( 0.9 * position + vec3( 10.0 * time ), vec3( 100.0 ) );",
+  " float displacement =  pnoise(  position + vec3(  time ), vec3( 1.0,1.0,2.0 ));",
+  " transformed += vec3(0.5,1.0,2.0) * displacement;",
   "	#include <morphtarget_vertex>",
   "	#include <skinning_vertex>",
   "	#include <project_vertex>",
