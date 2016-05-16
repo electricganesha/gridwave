@@ -6,12 +6,15 @@ var GridWave = function(el, config){
       ambientColor: 0x111111,
       dirColor: 0x333333,
       lightColor: 0xFFFFFF,
-      lightIntensity: 2,
-      lightDistance: 30.0,
+      lightIntensity: 3.2,
+      lightDistance: 36.0,
       lightElevation: 16,
       cameraElevation: 20,
       scaleX:1,
-      scaleY:1
+      scaleY:1,
+      alphaDistance:12,
+      alphaLower:10,
+      alphaExponent:4
     }
     this.el = el;
     if(config)
@@ -19,13 +22,14 @@ var GridWave = function(el, config){
         this[d] = config[d] ? config[d]:defaults[d];
      
     // THREE
-    this.el.style.background = ["transparent url(",this.imagePath,") center center"].join("");
-  
+    this.el.style.backgroundImage = "url("+this.imagePath+")";
+    console.log("url("+this.imagePath+")");
+             
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.el.addEventListener("mousemove", this.mousemove.bind(this));
   
-    this.renderer = new THREE.WebGLRenderer({antialias:true});
+    this.renderer = new THREE.WebGLRenderer({antialias:true, alpha: true });
     this.renderer.setPixelRatio( window.devicePixelRatio );
     this.width = this.el.offsetWidth;
     this.height = this.el.offsetHeight;
@@ -106,13 +110,16 @@ GridWave.prototype.getMaterial = function(){
             "roughness": { type: "1f", value: 0.5 },
             "metalness": { type: "1f", value: 0.2 },
             "envMapIntensity" : { type: "1f", value: 1 },
-            "time": { type:"1f", value: 0}
+            "time": { type:"1f", value: 0},
+            "alphaDistance" : { type: "1f", value: this.alphaDistance},
+            "alphaLower" : { type: "1f", value: this.alphaLower},
+            "alphaExponent" : { type: "1f", value: this.alphaExponent}
         }
 
     ] ),
 
     vertexShader: this.vertexShaderText,
-    fragmentShader: THREE.ShaderChunk[ 'meshphysical_frag' ],
+    fragmentShader: this.fragmentShaderText,
     transparent: true,
     lights: true
   })
@@ -365,4 +372,90 @@ GridWave.prototype.vertexShaderText = [
   "	#include <worldpos_vertex>",
   "	#include <shadowmap_vertex>",
   "}"
+].join("\n");
+
+GridWave.prototype.fragmentShaderText = [
+"#define PHYSICAL",
+"",
+"uniform vec3 diffuse;",
+"uniform vec3 emissive;",
+"uniform float roughness;",
+"uniform float metalness;",
+"uniform float opacity;",
+"uniform float alphaDistance;",
+"uniform float alphaLower;",
+"uniform float alphaExponent;",
+  
+"",
+"uniform float envMapIntensity; // temporary",
+"",
+"varying vec3 vViewPosition;",
+"",
+"#ifndef FLAT_SHADED",
+"",
+"	varying vec3 vNormal;",
+"",
+"#endif",
+"",
+"#include <common>",
+"#include <packing>",
+"#include <color_pars_fragment>",
+"#include <uv_pars_fragment>",
+"#include <uv2_pars_fragment>",
+"#include <map_pars_fragment>",
+"#include <alphamap_pars_fragment>",
+"#include <aomap_pars_fragment>",
+"#include <lightmap_pars_fragment>",
+"#include <emissivemap_pars_fragment>",
+"#include <envmap_pars_fragment>",
+"#include <fog_pars_fragment>",
+"#include <bsdfs>",
+"#include <cube_uv_reflection_fragment>",
+"#include <lights_pars>",
+"#include <lights_physical_pars_fragment>",
+"#include <shadowmap_pars_fragment>",
+"#include <bumpmap_pars_fragment>",
+"#include <normalmap_pars_fragment>",
+"#include <roughnessmap_pars_fragment>",
+"#include <metalnessmap_pars_fragment>",
+"#include <logdepthbuf_pars_fragment>",
+"#include <clipping_planes_pars_fragment>",
+"",
+"void main() {",
+"",
+"	#include <clipping_planes_fragment>",
+"",
+"	vec4 diffuseColor = vec4( diffuse, opacity );",
+"	ReflectedLight reflectedLight = ReflectedLight( vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ), vec3( 0.0 ) );",
+"	vec3 totalEmissiveRadiance = emissive;",
+"",
+"	#include <logdepthbuf_fragment>",
+"	#include <map_fragment>",
+"	#include <color_fragment>",
+"	#include <alphamap_fragment>",
+"	#include <alphatest_fragment>",
+"	#include <specularmap_fragment>",
+"	#include <roughnessmap_fragment>",
+"	#include <metalnessmap_fragment>",
+"	#include <normal_fragment>",
+"	#include <emissivemap_fragment>",
+"",
+"	// accumulation",
+"	#include <lights_physical_fragment>",
+"	#include <lights_template>",
+"   float adist= distance(geometry.position,pointLights[0].position - vec3(0.0,0.0,alphaLower));",
+"   diffuseColor.a =  pow(smoothstep(0.0,alphaDistance,adist),alphaExponent);",
+"	// modulation",
+"	#include <aomap_fragment>",
+"",
+"	vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;",
+"",
+"	gl_FragColor = vec4( outgoingLight, diffuseColor.a );",
+"",
+"	#include <premultiplied_alpha_fragment>",
+"	#include <tonemapping_fragment>",
+"	#include <encodings_fragment>",
+"	#include <fog_fragment>",
+"",
+"}"
 ].join("\n");
