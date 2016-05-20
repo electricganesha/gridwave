@@ -85,6 +85,59 @@ GridWave.prototype.resize = function(path){
     
 }
 
+GridWave.prototype.aoSetup = function(){
+  var params = {
+      output: 0,
+      saoBias: 0.5,
+      saoIntensity: 0.25,
+      saoScale: 1,
+      saoKernelRadius: 100,
+      saoMinResolution: 0,
+      saoBlur: true,
+      saoBlurRadius: 12,
+      saoBlurStdDev: 6,
+      saoBlurDepthCutoff: 0.01
+  }
+  this.saoRenderTarget = new THREE.WebGLRenderTarget( this.width, this.height,
+					{ minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat } );
+  this.blurIntermediateRenderTarget = this.saoRenderTarget.clone();
+  this.depthRenderTarget = new THREE.WebGLRenderTarget( this.width, this.height,
+					{ minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat } );
+  this.depthMaterial = new THREE.MeshDepthMaterial();
+  this.depthMaterial.depthPacking = THREE.RGBADepthPacking;
+  this.depthMaterial.blending = THREE.NoBlending;
+  
+  var saoMaterial = new THREE.ShaderMaterial( THREE.SAOShader );
+  saoMaterial.defines[ 'MODE' ] = 2;
+  saoMaterial.uniforms[ "tDepth" ].value =  depthRenderTarget;
+  saoMaterial.uniforms[ 'size' ].value.set( this.width, this.height );
+  saoMaterial.uniforms[ 'cameraNear' ].value = this.camera.near;
+  saoMaterial.uniforms[ 'cameraFar' ].value = this.camera.far;
+  saoMaterial.uniforms[ 'cameraInverseProjectionMatrix' ].value.getInverse( this.camera.projectionMatrix );
+  saoMaterial.uniforms[ 'cameraProjectionMatrix' ].value = this.camera.projectionMatrix;
+  saoMaterial.blending = THREE.NoBlending;
+  this.saoMaterial = saoMaterial;
+  
+  vBlurMaterial = new THREE.ShaderMaterial( THREE.DepthLimitedBlurShader );
+  hBlurMaterial.defines[ 'OUTPUT_SCREEN' ] =  0;
+  vBlurMaterial.uniforms[ "tDiffuse" ].value = saoRenderTarget;
+  vBlurMaterial.uniforms[ "cameraNear" ].value = camera.near;
+  vBlurMaterial.uniforms[ "cameraFar" ].value = camera.far;
+  vBlurMaterial.uniforms[ 'size' ].value.set( this.width, this.height );
+  vBlurMaterial.blending = THREE.NoBlending;
+  
+  hBlurMaterial = new THREE.ShaderMaterial( THREE.DepthLimitedBlurShader );
+  hBlurMaterial.defines[ 'OUTPUT_SCREEN' ] =  1;
+  hBlurMaterial.uniforms[ "tDiffuse" ].value = blurIntermediateRenderTarget;
+  hBlurMaterial.uniforms[ "tScreen" ].value = this.renderTarget;
+  hBlurMaterial.uniforms[ "cameraNear" ].value = camera.near;
+  hBlurMaterial.uniforms[ "cameraFar" ].value = camera.far;
+  hBlurMaterial.uniforms[ 'size' ].value.set( this.width, this.height );
+  hBlurMaterial.blending = THREE.NoBlending;
+}
+
+GridWave.prototype.aoPass = function(){
+}
 GridWave.prototype.mousemove = function(event){
     this.mouse.x = ( event.offsetX / this.width ) * 2 - 1;
 	this.mouse.y = - ( event.offsetY / this.height ) * 2 + 1;		
