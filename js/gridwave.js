@@ -14,21 +14,25 @@ var GridWave = function(el, config){
       scaleY:1,
       alphaDistance:12,
       alphaLower:10,
-      alphaExponent:4
+      alphaExponent:4,
+      geoFactorWidth:1.0,
+      geoFactorHeight:5.0,
+      geoFactorDepth:10.0,
+      geoMovementVelocity:0.3,
     }
     this.el = el;
     if(config)
-      for(var d in defaults) 
+      for(var d in defaults)
         this[d] = config[d] ? config[d]:defaults[d];
-     
+
     // THREE
     this.el.style.backgroundImage = "url("+this.imagePath+")";
     console.log("url("+this.imagePath+")");
-             
+
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.el.addEventListener("mousemove", this.mousemove.bind(this));
-  
+
     this.renderer = new THREE.WebGLRenderer({antialias:true, alpha: true });
     this.renderer.setPixelRatio( window.devicePixelRatio );
     this.width = this.el.offsetWidth;
@@ -37,11 +41,11 @@ var GridWave = function(el, config){
     this.renderer.setSize(this.width, this.height);
     this.camera.position.z = this.cameraElevation;
     this.scene = new THREE.Scene();
-    
+
     this.dirLight = new THREE.DirectionalLight(this.dirColor,0.66);
     this.dirLight.position.z = 2*this.cameraElevation;
     this.scene.add(this.dirLight);
-  
+
     this.ambient = new THREE.AmbientLight(this.ambientColor);
     this.scene.add(this.ambient);
 
@@ -51,7 +55,7 @@ var GridWave = function(el, config){
     var self=this;
     var modelPromise = this.loadModel(this.modelPath).then(function(geometry){
       /* self.mesh = new THREE.Mesh(geometry, new THREE.MeshStandardMaterial({
-        color:self.modelColor, 
+        color:self.modelColor,
         transparent:true,
         side: THREE.DoubleSide
       }));
@@ -62,9 +66,9 @@ var GridWave = function(el, config){
       self.camera.lookAt(self.mesh.position);
       self.dirLight.lookAt(self.mesh.position);
 	  self.mesh.geometry.computeBoundingBox();
-    
+
     });
-    
+
    this.el.appendChild( this.renderer.domElement );
 }
 
@@ -72,17 +76,17 @@ GridWave.prototype.loadModel = function(path){
     return new Promise(function(resolve,reject){
       var ld = new THREE.JSONLoader();
       var geometry;
-    
+
       ld.load( path, function( geometry,material ) {
         console.log(geometry);
         resolve(geometry);
-      });  
+      });
     });
-     
+
 }
 
 GridWave.prototype.resize = function(path){
-    
+
 }
 
 GridWave.prototype.aoSetup = function(){
@@ -140,7 +144,7 @@ GridWave.prototype.aoPass = function(){
 }
 GridWave.prototype.mousemove = function(event){
     this.mouse.x = ( event.offsetX / this.width ) * 2 - 1;
-	this.mouse.y = - ( event.offsetY / this.height ) * 2 + 1;		
+	this.mouse.y = - ( event.offsetY / this.height ) * 2 + 1;
 }
 
 GridWave.prototype.getMaterial = function(){
@@ -166,7 +170,11 @@ GridWave.prototype.getMaterial = function(){
             "time": { type:"1f", value: 0},
             "alphaDistance" : { type: "1f", value: this.alphaDistance},
             "alphaLower" : { type: "1f", value: this.alphaLower},
-            "alphaExponent" : { type: "1f", value: this.alphaExponent}
+            "alphaExponent" : { type: "1f", value: this.alphaExponent},
+            "geoFactorWidth": { type:"1f", value: this.geoFactorWidth},
+            "geoFactorHeight": { type:"1f", value: this.geoFactorHeight},
+            "geoFactorDepth": { type:"1f", value: this.geoFactorDepth},
+            "geoMovementVelocity": { type:"1f", value: this.geoMovementVelocity},
         }
 
     ] ),
@@ -180,21 +188,21 @@ GridWave.prototype.getMaterial = function(){
 
 GridWave.prototype.render = function(time){
     window.requestAnimationFrame(this.render.bind(this));
-    
+
     if(this.mesh){
-      this.raycaster.setFromCamera( this.mouse, this.camera );	
+      this.raycaster.setFromCamera( this.mouse, this.camera );
       var intersects = this.raycaster.intersectObjects( [this.mesh] );
 
       for ( var i = 0; i < intersects.length; i++ ) {
           var p = intersects[ i ].point;
-       
+
           this.light.position.x = p.x * 1.2;
           this.light.position.y = p.y * 1.2;
       }
       this.mesh.material.uniforms.time.value = time/2000;
     }
     this.renderer.render(this.scene,this.camera);
-    
+
 }
 
 GridWave.prototype.start = function(){
@@ -398,7 +406,11 @@ GridWave.prototype.vertexShaderText = [
 "		}",
 "",
 "		uniform float time;",
-  
+"		uniform float geoFactorWidth;",
+"		uniform float geoFactorHeight;",
+"		uniform float geoFactorDepth;",
+"		uniform float geoMovementVelocity;",
+
   "void main() {",
   " ",
   "	#include <uv_vertex>",
@@ -414,8 +426,8 @@ GridWave.prototype.vertexShaderText = [
   "#endif",
   "	#include <begin_vertex>",
   "	#include <displacementmap_vertex>",
-  " float displacement =  pnoise(  position + vec3(  time ), vec3( 1.0,1.0,2.0 ));",
-  " transformed += vec3(0.5,1.0,2.0) * displacement;",
+  " float displacement =  pnoise(  position + vec3( geoMovementVelocity * time ), vec3( 1.0,1.0,2.0 ));",
+  " transformed += vec3(geoFactorWidth,geoFactorHeight,geoFactorDepth) * displacement;",
   "	#include <morphtarget_vertex>",
   "	#include <skinning_vertex>",
   "	#include <project_vertex>",
@@ -438,7 +450,7 @@ GridWave.prototype.fragmentShaderText = [
 "uniform float alphaDistance;",
 "uniform float alphaLower;",
 "uniform float alphaExponent;",
-  
+
 "",
 "uniform float envMapIntensity; // temporary",
 "",
