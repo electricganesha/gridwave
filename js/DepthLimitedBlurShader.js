@@ -22,6 +22,7 @@ THREE.DepthLimitedBlurShader = {
 	uniforms: {
 
 		"tDiffuse":         { type: "t", value: null },
+      "tScreen":         { type: "t", value: null },
 		"size":             { type: "v2", value: new THREE.Vector2( 512, 512 ) },
 		"sampleUvOffsets":  { type: "v2v", value: [ new THREE.Vector2( 0, 0 ) ] },
 		"sampleWeights":    { type: "1fv", value: [ 1.0 ] },
@@ -67,9 +68,13 @@ THREE.DepthLimitedBlurShader = {
 
 		"varying vec2 vUv;",
 		"varying vec2 vInvSize;",
-
+      
+        "float UnpackFloatFromRGB(vec3 pack) {",
+        "   return dot(pack, vec3(1.0, 1.0 / 255.0, 1.0 / 65025.0));",
+        "}",
+      
 		"vec2 getDepthAO( const in vec2 screenPosition ) {",
-        " vec4 texel = texture2D( tDiffuse, screenPosition )",
+        " vec4 texel = texture2D( tDiffuse, screenPosition );",
         "  return vec2(UnpackFloatFromRGB( texel.rgb ),texel.a);",
 		"}",
 
@@ -82,12 +87,10 @@ THREE.DepthLimitedBlurShader = {
 			"#endif",
 
 		"}",
-        "float UnpackFloatFromRGB(vec3 pack) {",
-        "   return dot(pack, vec3(1.0, 1.0 / 255.0, 1.0 / 65025.0));",
-        "}",
+       
 		"void main() {",
 
-			"vec2 depth = getDepth( vUv );",
+			"vec2 depth = getDepthAO( vUv );",
 			"if( depth.x >= ( 1.0 - EPSILON ) ) {",
 				"discard;",
 			"}",
@@ -105,7 +108,7 @@ THREE.DepthLimitedBlurShader = {
 
 				"vec2 sampleUv = vUv + sampleUvOffset;",
                 
-                "depth = getDepth( sampleUv );",
+                "depth = getDepthAO( sampleUv );",
 				
                 "float viewZ = -getViewZ( depth.x );",
 
@@ -117,8 +120,8 @@ THREE.DepthLimitedBlurShader = {
 				"}",
                 
 				"sampleUv = vUv - sampleUvOffset;",
-                "depth = getDepth( sampleUv );",
-				"viewZ = -getViewZ( getDepth( depth.x ) );",
+                "depth = getDepthAO( sampleUv );",
+				"viewZ = -getViewZ( depth.x  );",
 
 				"if( abs( viewZ - centerViewZ ) > depthCutoff ) lBreak = true;",
 

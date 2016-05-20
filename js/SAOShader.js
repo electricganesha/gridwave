@@ -16,7 +16,7 @@ THREE.SAOShader = {
 		"DEPTH_PACKING": 1,
 		"PERSPECTIVE_CAMERA": 1
 	},
-
+    depthWrite:false,
 	uniforms: {
 
 		"tDepth":       { type: "t", value: null },
@@ -32,7 +32,7 @@ THREE.SAOShader = {
 		"bias":         { type: "f", value: 0.5 },
 
 		"minResolution": { type: "f", value: 0.0 },
-		"kernelRadius": { type: "f", value: 100.0 },
+		"kernelRadius": { type: "f", value: 50.0 },
 		"randomSeed":   { type: "f", value: 0.0 }
 	},
 
@@ -150,9 +150,7 @@ THREE.SAOShader = {
 				"angle += ANGLE_STEP;",
 
 				"float sampleDepth = getDepth( sampleUv );",
-				"if( sampleDepth >= ( 1.0 - EPSILON ) ) {",
-					"continue;",
-				"}",
+				
 
 				"float sampleViewZ = getViewZ( sampleDepth );",
 				"vec3 sampleViewPosition = getViewPosition( sampleUv, sampleDepth, sampleViewZ );",
@@ -186,7 +184,8 @@ THREE.SAOShader = {
 
 			"float ambientOcclusion = getAmbientOcclusion( viewPosition );",
 
-			"gl_FragColor = vec4(PackFloatToRGB(centerDepth), 1.0 - ambientOcclusion);",
+			//"gl_FragColor = vec4(PackFloatToRGB(centerDepth), 1.0 - ambientOcclusion);",
+          "gl_FragColor = vec4(vec3(ambientOcclusion),1.0);",
           
 
 		"}"
