@@ -3,7 +3,7 @@ var GridWave = function(el, config){
       imagePath: null,
       modelPath:null,
       modelColor: 0x3F3F3F,
-      ambientColor: 0x111111,
+      ambientColor: 0x333333,
       dirColor: 0x333333,
       lightColor: 0xFFFFFF,
       lightIntensity: 3.2,
@@ -19,6 +19,7 @@ var GridWave = function(el, config){
       geoFactorHeight:5.0,
       geoFactorDepth:10.0,
       geoMovementVelocity:0.3,
+      enableAO: 0.5
     }
     this.el = el;
     if(config)
@@ -52,6 +53,9 @@ var GridWave = function(el, config){
     this.light.position.z = this.lightElevation;
     this.scene.add(this.light);
     var self=this;
+    if(this.enableAO){  
+      this.aoSetup();
+    }
     var modelPromise = this.loadModel(this.modelPath).then(function(geometry){
       self.mesh = new THREE.Mesh(geometry, self.getMaterial());
       self.mesh.scale.set(self.scaleX,self.scaleY,1);
@@ -59,9 +63,12 @@ var GridWave = function(el, config){
       self.camera.lookAt(self.mesh.position);
       self.dirLight.lookAt(self.mesh.position);
 	  self.mesh.geometry.computeBoundingBox();
-
+      if(self.enableAO){ 
+        self.mesh.material.uniforms.aoMap.value = self.saoRenderTarget;
+        self.mesh.material.uniforms.aoMapIntensity.value = self.enableAO;
+      }
     });
-    this.aoSetup();
+  
    this.el.appendChild( this.renderer.domElement );
 }
 
@@ -102,7 +109,8 @@ GridWave.prototype.aoSetup = function(){
   
   this.saoRenderTarget = new THREE.WebGLRenderTarget( this.width, this.height,
 					{ minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat } );
-  this.blurIntermediateRenderTarget = this.saoRenderTarget.clone();
+  this.blurIntermediateRenderTarget = new THREE.WebGLRenderTarget( this.width, this.height,
+					{ minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter, format: THREE.RGBAFormat } );
   this.depthRenderTarget = new THREE.WebGLRenderTarget( this.width, this.height,
 					{ minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, format: THREE.RGBAFormat } );
   this.depthMaterial = this.getMaterial(true);
@@ -120,21 +128,17 @@ GridWave.prototype.aoSetup = function(){
   this.saoMaterial = saoMaterial;
   
   this.vBlurMaterial = new THREE.ShaderMaterial( THREE.DepthLimitedBlurShader );
-  this.vBlurMaterial.defines[ 'OUTPUT_SCREEN' ] =  0;
-  this.vBlurMaterial.uniforms[ "tDiffuse" ].value = this.saoRenderTarget;
-  this.vBlurMaterial.uniforms[ "cameraNear" ].value = this.camera.near;
-  this.vBlurMaterial.uniforms[ "cameraFar" ].value = this.camera.far;
+  THREE.BlurShaderUtils.configure( this.vBlurMaterial, 12, 6, new THREE.Vector2( 0, 1 ) );
   this.vBlurMaterial.uniforms[ 'size' ].value.set( this.width, this.height );
   this.vBlurMaterial.blending = THREE.NoBlending;
   
   this.hBlurMaterial = new THREE.ShaderMaterial( THREE.DepthLimitedBlurShader );
-  this.hBlurMaterial.defines[ 'OUTPUT_SCREEN' ] =  0;
-  this.hBlurMaterial.uniforms[ "tDiffuse" ].value = this.blurIntermediateRenderTarget;
-  this.hBlurMaterial.uniforms[ "tScreen" ].value = this.renderTarget;
-  this.hBlurMaterial.uniforms[ "cameraNear" ].value = this.camera.near;
-  this.hBlurMaterial.uniforms[ "cameraFar" ].value = this.camera.far;
+  THREE.BlurShaderUtils.configure( this.hBlurMaterial, 12, 6, new THREE.Vector2( 1, 0 ) );
   this.hBlurMaterial.uniforms[ 'size' ].value.set( this.width, this.height );
   this.hBlurMaterial.blending = THREE.NoBlending;
+  
+  
+				
 }
 
 GridWave.prototype.aoPass = function(renderTarget){
@@ -145,14 +149,15 @@ GridWave.prototype.aoPass = function(renderTarget){
   
   
   this.passQuad.material = this.saoMaterial;
-  this.renderer.render(this.passScene,this.passCamera);
+  this.renderer.render(this.passScene,this.passCamera, this.saoRenderTarget);
   
-  return;
+ 
   this.passQuad.material = this.vBlurMaterial;
+  this.vBlurMaterial.uniforms[ "tDiffuse" ].value = this.saoRenderTarget;
   this.renderer.render(this.passScene,this.passCamera, this.blurIntermediateRenderTarget);
-  
   this.passQuad.material = this.hBlurMaterial;
-  this.renderer.render(this.passScene,this.passCamera);
+  this.hBlurMaterial.uniforms[ "tDiffuse" ].value = this.blurIntermediateRenderTarget;
+  this.renderer.render(this.passScene,this.passCamera, this.saoRenderTarget);
   
 }
 GridWave.prototype.mousemove = function(event){
@@ -161,7 +166,8 @@ GridWave.prototype.mousemove = function(event){
 }
 
 GridWave.prototype.getMaterial = function(depth){
-  var defines = depth ? {"DEPTH_PACKING":THREE.RGBADepthPacking}:null;
+  var defines = depth ? {"DEPTH_PACKING":THREE.RGBADepthPacking}:{};
+  if(this.enableAO) defines["USE_AOMAP"]=1;
   return new THREE.ShaderMaterial({
     defines:defines,
     uniforms: THREE.UniformsUtils.merge( [
@@ -190,6 +196,7 @@ GridWave.prototype.getMaterial = function(depth){
             "geoFactorHeight": { type:"1f", value: this.geoFactorHeight},
             "geoFactorDepth": { type:"1f", value: this.geoFactorDepth},
             "geoMovementVelocity": { type:"1f", value: this.geoMovementVelocity},
+            "resolution": {type: "v2", value:new THREE.Vector2(0)}
         }
 
     ] ),
@@ -207,7 +214,7 @@ GridWave.prototype.render = function(time){
     if(this.mesh){
       this.raycaster.setFromCamera( this.mouse, this.camera );
       var intersects = this.raycaster.intersectObjects( [this.mesh] );
-
+      
       for ( var i = 0; i < intersects.length; i++ ) {
           var p = intersects[ i ].point;
 
@@ -215,10 +222,14 @@ GridWave.prototype.render = function(time){
           this.light.position.y = p.y * 1.2;
       }
       this.mesh.material.uniforms.time.value = time/2000;
-      this.depthMaterial.uniforms.time.value = time/2000;
+      this.mesh.material.uniforms.resolution.value.set(this.width,this.height);
+      if(this.enableAO){
+        this.depthMaterial.uniforms.time.value = time/2000;
+        this.aoPass();  
+      }
     }
     this.renderer.render(this.scene,this.camera);
-    this.aoPass();
+    
 }
 
 GridWave.prototype.start = function(){
@@ -466,7 +477,7 @@ GridWave.prototype.fragmentShaderText = [
 "uniform float alphaDistance;",
 "uniform float alphaLower;",
 "uniform float alphaExponent;",
-
+"uniform vec2 resolution;",
 "",
 "uniform float envMapIntensity; // temporary",
 "",
@@ -527,7 +538,13 @@ GridWave.prototype.fragmentShaderText = [
 "   float adist= distance(geometry.position,pointLights[0].position - vec3(0.0,0.0,alphaLower));",
 "   diffuseColor.a =  pow(smoothstep(0.0,alphaDistance,adist),alphaExponent);",
 "	// modulation",
-"	#include <aomap_fragment>",
+"#ifdef USE_AOMAP",
+"	float ambientOcclusion = ( texture2D( aoMap, gl_FragCoord.xy/resolution ).r - 1.0 ) * aoMapIntensity + 1.0;",
+"	reflectedLight.indirectDiffuse *= ambientOcclusion;",
+//"	reflectedLight.directDiffuse *= pow(ambientOcclusion,2.0);",
+//"   float dotNV = saturate( dot( geometry.normal, geometry.viewDir ) );",
+//"   reflectedLight.directSpecular *= computeSpecularOcclusion( dotNV, ambientOcclusion, material.specularRoughness );",
+"#endif",
 "",
 "	vec3 outgoingLight = reflectedLight.directDiffuse + reflectedLight.indirectDiffuse + reflectedLight.directSpecular + reflectedLight.indirectSpecular + totalEmissiveRadiance;",
 "",
@@ -537,7 +554,46 @@ GridWave.prototype.fragmentShaderText = [
 "	#include <tonemapping_fragment>",
 "	#include <encodings_fragment>",
 "	#include <fog_fragment>",
-"",
+//"gl_FragColor = vec4(vec3(ambientOcclusion),1.0);",
 "}"
 ].join("\n");
 
+THREE.BlurShaderUtils = {
+
+	createSampleWeights: function( kernelRadius, stdDev ) {
+
+		var gaussian = function( x, stdDev ) {
+			return Math.exp( - ( x*x ) / ( 2.0 * ( stdDev * stdDev ) ) ) / ( Math.sqrt( 2.0 * Math.PI ) * stdDev );
+		};
+
+		var weights = [];
+
+		for( var i = 0; i <= kernelRadius; i ++ ) {
+			weights.push( gaussian( i, stdDev ) );
+		}
+
+		return weights;
+	},
+
+	createSampleOffsets: function( kernelRadius, uvIncrement ) {
+
+		var offsets = [];
+
+		for( var i = 0; i <= kernelRadius; i ++ ) {
+			offsets.push( uvIncrement.clone().multiplyScalar( i ) );
+		}
+
+		return offsets;
+
+	},
+
+	configure: function( material, kernelRadius, stdDev, uvIncrement ) {
+
+		material.defines[ 'KERNEL_RADIUS' ] = kernelRadius;
+		material.uniforms[ 'sampleUvOffsets' ].value = THREE.BlurShaderUtils.createSampleOffsets( kernelRadius, uvIncrement );
+		material.uniforms[ 'sampleWeights' ].value = THREE.BlurShaderUtils.createSampleWeights( kernelRadius, stdDev );
+		material.needsUpdate = true;
+
+	}
+
+};

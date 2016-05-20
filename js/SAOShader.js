@@ -27,12 +27,12 @@ THREE.SAOShader = {
 		"cameraProjectionMatrix": { type: "m4", value: new THREE.Matrix4() },
 		"cameraInverseProjectionMatrix": { type: "m4", value: new THREE.Matrix4() },
 
-		"scale":        { type: "f", value: 1.0 },
+		"scale":        { type: "f", value: 10.0 },
 		"intensity":    { type: "f", value: 0.1 },
 		"bias":         { type: "f", value: 0.5 },
 
 		"minResolution": { type: "f", value: 0.0 },
-		"kernelRadius": { type: "f", value: 50.0 },
+		"kernelRadius": { type: "f", value: 10.0 },
 		"randomSeed":   { type: "f", value: 0.0 }
 	},
 
@@ -184,8 +184,8 @@ THREE.SAOShader = {
 
 			"float ambientOcclusion = getAmbientOcclusion( viewPosition );",
 
-			//"gl_FragColor = vec4(PackFloatToRGB(centerDepth), 1.0 - ambientOcclusion);",
-          "gl_FragColor = vec4(vec3(ambientOcclusion),1.0);",
+			"gl_FragColor = vec4(PackFloatToRGB(centerViewZ), 1.0 - ambientOcclusion);",
+          //"gl_FragColor = vec4(vec3(1.0-ambientOcclusion),1.0);",
           
 
 		"}"
