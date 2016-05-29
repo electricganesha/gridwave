@@ -35,11 +35,10 @@ var GridWave = function(el, config){
 
     this.renderer = new THREE.WebGLRenderer({antialias:true, alpha: true, premultipliedAlpha:false });
     this.renderer.setPixelRatio( window.devicePixelRatio );
-    this.width = this.el.offsetWidth;
-    this.height = this.el.offsetHeight;
-    this.camera = new THREE.PerspectiveCamera(45,this.width/this.height,1,500);
-    this.renderer.setSize(this.width, this.height);
-    this.camera.position.z = this.cameraElevation;
+    
+    window.addEventListener("resize", this.resize.bind(this));
+    this.resize();  
+  
     this.scene = new THREE.Scene();
 
     this.dirLight = new THREE.DirectionalLight(this.dirColor,0.66);
@@ -70,6 +69,7 @@ var GridWave = function(el, config){
     });
   
    this.el.appendChild( this.renderer.domElement );
+  
 }
 
 GridWave.prototype.loadModel = function(path){
@@ -86,7 +86,17 @@ GridWave.prototype.loadModel = function(path){
 }
 
 GridWave.prototype.resize = function(path){
-
+  this.width = this.el.offsetWidth;
+  this.height = this.el.offsetHeight;
+  
+  this.camera = new THREE.PerspectiveCamera(45,this.width/this.height,1,500);
+  this.camera.position.z = this.cameraElevation;
+    
+  this.renderer.setSize(this.width, this.height);
+  if(this.depthRenderTarget) this.depthRenderTarget.setSize(this.width, this.height);
+  if(this.saoRenderTarget) this.saoRenderTarget.setSize(this.width, this.height);
+  if(this.blurIntermediateRenderTarget) this.blurIntermediateRenderTarget.setSize(this.width, this.height);
+  
 }
 
 GridWave.prototype.aoSetup = function(){
