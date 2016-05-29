@@ -33,7 +33,7 @@ var GridWave = function(el, config){
     this.mouse = new THREE.Vector2();
     this.el.addEventListener("mousemove", this.mousemove.bind(this));
 
-    this.renderer = new THREE.WebGLRenderer({antialias:true, alpha: true });
+    this.renderer = new THREE.WebGLRenderer({antialias:true, alpha: true, premultipliedAlpha:false });
     this.renderer.setPixelRatio( window.devicePixelRatio );
     this.width = this.el.offsetWidth;
     this.height = this.el.offsetHeight;
