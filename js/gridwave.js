@@ -32,7 +32,8 @@ var GridWave = function(el, config){
     this.raycaster = new THREE.Raycaster();
     this.mouse = new THREE.Vector2();
     this.el.addEventListener("mousemove", this.mousemove.bind(this));
-
+    
+    this.dpr = window.devicePixelRatio;
     this.renderer = new THREE.WebGLRenderer({antialias:true, alpha: true, premultipliedAlpha:false });
     this.renderer.setPixelRatio( window.devicePixelRatio );
     
@@ -232,7 +233,7 @@ GridWave.prototype.render = function(time){
           this.light.position.y = p.y * 1.2;
       }
       this.mesh.material.uniforms.time.value = time/2000;
-      this.mesh.material.uniforms.resolution.value.set(this.width,this.height);
+      this.mesh.material.uniforms.resolution.value.set(this.width*this.dpr,this.height*this.dpr);
       if(this.enableAO){
         this.depthMaterial.uniforms.time.value = time/2000;
         this.aoPass();  
